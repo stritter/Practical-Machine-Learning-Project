@@ -1,0 +1,104 @@
+---
+title: "Practical Machine Learning Project"
+author: "stritter"
+date: "21 Nov 2014"
+output: html_document
+---
+## Machine learning algorithm to predict activity quality from activity monitors
+
+**Background**
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+**Data**
+
+The training data for this project are available here:  
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:  
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+```{r}
+# Creating folder
+if(!file.exists("data")){
+  dir.create("data")
+}
+
+# Downloading data
+fileUrlTraining <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrlTraining,destfile="./data/training.csv",method="curl")
+
+fileUrlTesting <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrlTesting,destfile="./data/testing.csv",method="curl")
+
+# Readind data
+trainData <- read.csv("./data/training.csv")
+testData <- read.csv("./data/testing.csv")
+
+# Remove variables with empty entries or NAs
+
+# Test Dataset without NAs
+testDatawithoutNA <- testData[ , ! apply(testData, 2, function(x) all(is.na(x)))]
+
+# Columns that are different from NA 
+namestestDataWithoutNA <- names(testDatawithoutNA)
+
+# Subsetting training data with only the columns without NAs
+trainDataReduced <- trainData[ , which(names(trainData) %in% namestestDataWithoutNA)]
+trainDataReduced$classe <- trainData$classe
+trainDataReduced <- trainDataReduced[,-(1:7)]
+
+# Creating samller training data set due to computation time
+set.seed(123)
+library("caret")
+index<- createDataPartition(y=trainDataReduced$classe, p=0.25, list=FALSE)
+train25 <- trainDataReduced[index,]
+test25 <- trainDataReduced[-index,]
+
+# Train model
+set.seed(123)
+model <- train(train25$classe ~ ., method="rf", preProcess=c("center", "scale"), trControl=trainControl(method = "cv", number = 4), data=train25)
+model
+
+# In sample error
+predictionTrainData <- predict(model, newdata=train25)
+table(predictionTrainData,train25$classe)
+# This yields an in sample error of 0%. We expect an higher out of sample error.
+
+# Predict on test data from the training data
+predictions <- predict(model, newdata=test25)
+confusionMatrix(predictions, test25$classe)
+# Accuracy : 0.9772
+
+# Predicting the Quality of Movement for the testData
+answers <- predict(model, newdata=testData) 
+
+# Writing txt-files with solution for the submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+```
+## Conclusion  
+
+Lecture notes   
+**Out of Sample Error**: The error rate you get on a new data set. Sometimes called generalization error.
+
+The chosen model(Random Forest) incorporates cross validation and preprocessing of the features in from of centering and scaling.
+
+Applying the model to the **train data**:
+This yields an in sample error of 0%. We expect an higher out of sample error.
+
+Applying the model to the **test data** yields: The applied model on the test data has an accuracy of 0.9772.
+**The out of sample error is 0.0228.** This is achieved by 4 cross validations.
+
+I used only 25% of the training data to biuld the model, i.e. approximitaley 1000 observation for each activity quality class and less than 40 observations for each activity quality class features.
